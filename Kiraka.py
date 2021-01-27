@@ -5,11 +5,13 @@ import wget
 from bs4 import BeautifulSoup as Soup
 from tempfile import gettempdir
 from shutil import rmtree
+from glob import glob
+
 class Downloader:
 
     download_path = os.path.join(gettempdir(), "kiraka")
-    KIRAKA_SENDUNGEN = ['https://kinder.wdr.de/radio/kiraka/kiraka-on-demand-100.html']
-    KIRAKA_HOERSPIELE = ['https://kinder.wdr.de/radio/kiraka/hoeren/hoerspiele/kinderhoerspiel-podcast-102.html']
+    KIRAKA_SENDUNGEN = 'https://kinder.wdr.de/radio/kiraka/kiraka-on-demand-100.html'
+    KIRAKA_HOERSPIELE = 'https://kinder.wdr.de/radio/kiraka/hoeren/hoerspiele/kinderhoerspiel-podcast-102.html'
 
     def __init__(self):
         if not os.path.exists(self.download_path):
@@ -26,7 +28,7 @@ class Downloader:
         print(f"Download path set to: [{download_path}]")
 
     @staticmethod
-    def get_links(*args, websites: tuple = (r'https://kinder.wdr.de/radio/kiraka/kiraka-on-demand-100.html',)):
+    def get_links(websites: tuple = ('https://kinder.wdr.de/radio/kiraka/kiraka-on-demand-100.html',)):
         """
         Link zu den Hörspielen
         https://kinder.wdr.de/radio/kiraka/hoeren/hoerspiele/kinderhoerspiel-podcast-102.html
@@ -37,8 +39,6 @@ class Downloader:
         :return: This function return a list a links as str
         """
         link_container = []
-        # response = None
-
         if not websites or not isinstance(websites, tuple):
             raise ValueError("The variable [websites] was None or was not a tuple.")
 
@@ -47,11 +47,11 @@ class Downloader:
             try:
                 response = str(http.request('GET', website).data)
             except:
-                print(f"Could not request [{website}]")
+                print(f"Could not request [{str(website)}]")
                 break
 
             if response:
-                links = map(lambda x: x if (x.startswith('https')) else f"https:{x}", re.findall(r'(//\S+\.mp3)', response))
+                links = re.findall(r'(http://deviceids-medp.wdr.de/ondemand/\S+\.js)', response)
                 [link_container.append(link) for link in links]
 
         return link_container
@@ -99,7 +99,7 @@ class Downloader:
         """
 
         for url in urls:
-            filename = re.search(r'\w+\.mp3', url).group()
+            filename = re.search(r'\w+\.\w{2,3}$', url).group()
             out_path = os.path.join(cls.download_path, filename)
             if not os.path.exists(cls.download_path):
                 os.mkdir(cls.download_path)
@@ -117,4 +117,13 @@ class Downloader:
                     print(f"WHATIF-Downloading:\t [{url[0:30]}...] to [{out_path}] with filename [{filename}].")
             else:
                 print(f'Skipped\t\t\t\t: [{url}] cause file [{out_path}] already exists.')
-            # Download content
+
+    @classmethod
+    def parse_js_file(cls):
+        link_container = []
+        js_files = glob(os.path.join(cls.download_path, "*.js"))
+        for js_file in js_files:
+            with open(js_file,"r") as file:
+                links = map(lambda url: "http:" + url, re.findall("//\S+?\.mp3", file.read()))
+                [link_container.append(link) for link in links if not link_container.__contains__(link)]
+        return link_container
